@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Битва за территории v9 (10×10)</title>
+  <style>
+    /* ========== BASIC LAYOUT ========== */
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #f4f6fa;
+      margin: 0;
+      padding-bottom: 120px;
+    }
+    h1 { margin: 10px 0 0; }
+
+    /* ========== HUD PANELS ========== */
+    .info {
+      display: flex;
+      justify-content: space-around;
+      background: rgba(0, 0, 0, 0.07);
+      padding: 10px;
+    }
+    .panel {
+      background: #fff;
+      padding: 10px;
+      border-radius: 5px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      min-width: 120px;
+    }
+
+    /* ========== GRID ========== */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(10, 40px);
+      grid-gap: 4px;
+      margin: 20px auto;
+      width: 436px; /* 10×40 + 9×4 */
+    }
+    .cell {
+      width: 40px;
+      height: 40px;
+      border: 1px solid #888;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      background: #ddd;
+      transition: transform 0.2s;
+      position: relative;
+      outline: none;
+    }
+    .cell:focus { box-shadow: 0 0 0 2px #1976d2; }
+    .cell:hover { transform: scale(1.1); background: #ccc; }
+
+    /* Territories */
+    .player1-territory { background: rgba(0, 0, 255, 0.2); }
+    .player2-territory { background: rgba(255, 0, 0, 0.2); }
+
+    /* Special unit styling */
+    .scout-unit { 
+      animation: scout-pulse 1s infinite alternate;
+      font-size: 1.2em;
+      text-shadow: 0 0 5px yellow;
+    }
+
+    @keyframes scout-pulse {
+      0% { transform: scale(1); }
+      100% { transform: scale(1.3); }
+    }
+
+    /* Selection & Highlights */
+    .selected { outline: 3px solid #ff0; }
+    .valid-move { animation: move-pulse 1s infinite; }
+    .valid-attack { animation: attack-pulse 1s infinite; }
+
+    @keyframes move-pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(0, 255, 0, 0.7); }
+      50%  { box-shadow: 0 0 0 8px rgba(0, 255, 0, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(0, 255, 0, 0.7); }
+    }
+    @keyframes attack-pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7); }
+      50%  { box-shadow: 0 0 0 8px rgba(255, 0, 0, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7); }
+    }
+
+    /* ========== BUTTONS & CONTROLS ========== */
+    button {
+      margin: 5px;
+      padding: 8px 12px;
+      font-size: 14px;
+      border: none;
+      border-radius: 4px;
+      background: #1976d2;
+      color: #fff;
+      cursor: pointer;
+    }
+    button:disabled { background: #999; cursor: not-allowed; }
+    .controls { margin: 10px; }
+
+    /* ========== HISTORY ========== */
+    .history {
+      max-height: 150px;
+      overflow-y: auto;
+      margin: 10px auto;
+      width: 436px;
+      text-align: left;
+      background: #fff;
+      padding: 10px;
+      border-radius: 5px;
+    }
+
+    /* ========== POP‑UPS ========== */
+    .menu, .hint, .winner, .rules {
+      position: fixed;
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+      z-index: 1000;
+    }
+    .menu, .hint { top: 50%; left: 50%; transform: translate(-50%, -50%); min-width: 300px; }
+    .winner { top: 30%; left: 50%; transform: translate(-50%, -30%); }
+    .rules { bottom: 20px; right: 20px; text-align: left; min-width: 200px; }
+    .rules.hidden { display: none; }
+    .error-message { color: #c00; margin: 10px 0; font-weight: bold; }
+
+    /* Scout specific styles */
+    @keyframes scout-button-glow {
+      0% { box-shadow: 0 0 5px gold; }
+      50% { box-shadow: 0 0 15px gold; }
+      100% { box-shadow: 0 0 5px gold; }
+    }
+    
+    .scout-button {
+      animation: scout-button-glow 2s infinite;
+      transform: scale(1.05);
+    }
+    
+    /* God Mode Button Styles */
+    @keyframes godmode-pulse {
+      0% { box-shadow: 0 0 5px gold; }
+      50% { box-shadow: 0 0 15px gold, 0 0 20px rgba(255, 215, 0, 0.5); }
+      100% { box-shadow: 0 0 5px gold; }
+    }
+    
+    .god-mode-active {
+      background: linear-gradient(45deg, gold, orange) !important;
+      color: black !important;
+      font-weight: bold !important;
+      animation: godmode-pulse 1.5s infinite !important;
+      transform: scale(1.05);
+    }
+
+    /* Auto Play Button */
+    .auto-play-button {
+      background: #4CAF50 !important;
+      color: white !important;
+    }
+    
+    .auto-play-button:hover {
+      background: #45a049 !important;
+    }
+  </style>
+</head>
+<body>
+  <h1>Битва за территории v9</h1>
+  <button id="toggleRules">Правила</button>
+  <div id="rules" class="rules">
+    <h3>Правила</h3>
+    <ul>
+      <li>Поле: 10×10.</li>
+      <li>Фаза расстановки: каждый размещает 3 рыцаря на своих флангах.</li>
+      <li>Фаза игры: выбрать юнита, переместить или атаковать.</li>
+      <li>Ресурсы: каждую фазу вы получаете +1 за каждую вашу территорию.</li>
+      <li>Покупка: юниты доступны при достаточных ресурсах и разблокированы по количеству территорий.</li>
+      <li>Победа: у противника нет юнитов или заполнено всё поле (сравниваются территории).</li>
+      <li>Скаут (🔭): Читерский юнит для тестирования. Стоит 1 ресурс, ходит на 10 клеток и захватывает всю территорию в радиусе 3 клеток.</li>
+    </ul>
+  </div>
+
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+  <script type="module">
+  import { UNITS, UNIT_SYMBOLS, ABILITIES } from './units.js';
+  
+  (function () {
+    const e = React.createElement;
+
+    /* ========== CONSTANTS ========== */
+    const SIZE = 10;          // размер поля
+    const INIT = 3;           // юнитов в стартовой расстановке
+
+    // Используем определения из units.js
+    const TYPES = UNITS;
+
+    /* Соседние клетки (4‑связность) */
+    const neigh = (x, y) =>
+      [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]].filter(
+        ([i, j]) => i >= 0 && i < SIZE && j >= 0 && j < SIZE
+      );
+
+    /* ========== REACT COMPONENTS ========== */
+    const { useState, useEffect } = React;
+
+    // Клетка поля
+    function Cell({ i, j, terr, unit, selected, validMove, validAttack, onClick }) {
+      let className = "cell";
+      if (terr === 1) className += " player1-territory";
+      if (terr === 2) className += " player2-territory";
+      if (selected) className += " selected";
+      if (validMove) className += " valid-move";
+      if (validAttack) className += " valid-attack";
+      
+      // Дополнительный класс для Скаута
+      const isScout = unit && unit.type === 'SCOUT';
+      const unitClassName = isScout ? "scout-unit" : "";
+      
+      return (
+        e('div', {
+          className,
+          tabIndex: 0,
+          'aria-label': `Клетка ${i},${j}${unit ? `, ${TYPES[unit.type].description}, HP:${unit.hp}` : ''}`,
+          onClick: () => onClick(i, j),
+          onKeyDown: e => { if (e.key === "Enter" || e.key === " ") onClick(i, j); }
+        },
+          unit && e('span', { 
+            title: `HP:${unit.hp}`, 
+            className: unitClassName 
+          }, UNIT_SYMBOLS[unit.type])
+        )
+      );
+    }
+
+    // Сетка поля
+    function Grid({ units, terr, sel, moves, att, onCellClick }) {
+      let cells = [];
+      for (let i = 0; i < SIZE; i++) {
+        for (let j = 0; j < SIZE; j++) {
+          cells.push(
+            e(Cell, {
+              key: `${i},${j}`,
+              i, j,
+              terr: terr[i][j],
+              unit: units[i][j],
+              selected: sel && sel.x === i && sel.y === j,
+              validMove: moves.some(m => m[0] === i && m[1] === j),
+              validAttack: att.some(a => a[0] === i && a[1] === j),
+              onClick: onCellClick
+            })
+          );
+        }
+      }
+      return e('div', { className: 'grid' }, cells);
+    }
+
+    // Панель информации
+    function HUD({ pl, res, phase, turn }) {
+      return e('div', { className: 'info' },
+        e('div', { className: 'panel' }, `Player: ${pl}`),
+        e('div', { className: 'panel' }, `✶ ${res}`),
+        e('div', { className: 'panel' }, `Phase: ${phase}`),
+        e('div', { className: 'panel' }, `Turn: ${turn}`)
+      );
+    }
+
+    // История ходов
+    function History({ hist }) {
+      return e('div', { className: 'history' },
+        e('h4', null, 'History'),
+        e('ul', null, hist.map((m, i) => e('li', { key: i }, m)))
+      );
+    }
+
+    // Меню покупки
+    function BuyMenu({ terr, pl, res, onBuy, onClose }) {
+      const unitButtons = Object.entries(TYPES)
+        .sort(([, a], [, b]) => a.unlock - b.unlock)
+        .map(([k, v]) =>
+          e('button', {
+            key: k,
+            title: `${v.description}\nСтоимость: ${v.cost}\nРазблокировка: ${v.unlock} территорий`,
+            disabled: (res < v.cost || terr.flat().filter(t => t === pl).length < v.unlock),
+            onClick: () => onBuy(k)
+          }, `${UNIT_SYMBOLS[k]} ${v.description} (${v.cost})`)
+        );
+      
+      return e('div', { className: 'menu', role: 'dialog', 'aria-modal': 'true' },
+        e('h4', null, 'Buy Unit'),
+        ...unitButtons,
+        e('button', { onClick: onClose }, 'Close')
+      );
+    }
+
+    // Главное приложение
+    function App() {
+      // Состояния
+      const [units, setUnits] = useState(Array(SIZE).fill().map(() => Array(SIZE).fill(null)));
+      const [terr, setTerr] = useState(Array(SIZE).fill().map(() => Array(SIZE).fill(null)));
+      const [res, setRes] = useState(0);
+      const [placed, setPlaced] = useState(0);
+      const [phase, setPhase] = useState('placement');
+      const [pl, setPl] = useState(1);
+      const [sel, setSel] = useState(null);
+      const [moves, setMoves] = useState([]);
+      const [att, setAtt] = useState([]);
+      const [menu, setMenu] = useState(false);
+      const [place, setPlace] = useState(null);
+      const [hint, setHint] = useState(false);
+      const [hist, setHist] = useState([]);
+      const [turn, setTurn] = useState(1);
+      const [win, setWin] = useState(null);
+      const [error, setError] = useState(null);
+      const [isGodMode, setIsGodMode] = useState(false);
+      const [isAutoPlaying, setIsAutoPlaying] = useState(false);
+
+      // Переход к фазе игры после расстановки
+      useEffect(() => {
+        if (phase === 'placement' && placed === INIT * 2) {
+          setPhase('game');
+          if (!isGodMode) {
+            setHist(h => [...h, 'Начинается игра']);
+          }
+        }
+      }, [phase, placed, isGodMode]);
+
+      // Доход ресурсов в начале хода
+      useEffect(() => {
+        if (phase === 'game') {
+          const inc = terr.flat().filter(t => t === pl).length;
+          setRes(r => r + inc);
+          if (!isGodMode) {
+            setHist(h => [...h, `+${inc}✶ за территории`]);
+          }
+        }
+      }, [turn, isGodMode]);
+
+      // Проверка победы
+      useEffect(() => {
+        if (phase === 'game') {
+          const flat = units.flat();
+          if (!flat.some(u => u && u.pl === 1)) setWin(2);
+          else if (!flat.some(u => u && u.pl === 2)) setWin(1);
+          else if (flat.every(u => u)) {
+            const c1 = terr.flat().filter(t => t === 1).length;
+            const c2 = terr.flat().filter(t => t === 2).length;
+            setWin(c1 > c2 ? 1 : c2 > c1 ? 2 : 'Draw');
+          }
+        }
+      }, [units]);
+
+      // Сохранение состояния
+      useEffect(() => {
+        const state = { units, terr, res, placed, phase, pl, sel, moves, att, menu, place, hint, hist, turn, win, isGodMode };
+        localStorage.setItem('battleGameState', JSON.stringify(state));
+      }, [units, terr, res, placed, phase, pl, sel, moves, att, menu, place, hint, hist, turn, win, isGodMode]);
+
+      // Загрузка состояния
+      useEffect(() => {
+        const saved = localStorage.getItem('battleGameState');
+        if (saved) {
+          try {
+            const state = JSON.parse(saved);
+            setUnits(state.units);
+            setTerr(state.terr);
+            setRes(state.res);
+            setPlaced(state.placed);
+            setPhase(state.phase);
+            setPl(state.pl);
+            setSel(state.sel);
+            setMoves(state.moves);
+            setAtt(state.att);
+            setMenu(state.menu);
+            setPlace(state.place);
+            setHint(state.hint);
+            setHist(state.hist);
+            setTurn(state.turn);
+            setWin(state.win);
+            if (state.isGodMode) setIsGodMode(state.isGodMode);
+          } catch {}
+        }
+      }, []);
+
+      // Функция для выполнения хода
+      function executeMove(fromX, fromY, toX, toY) {
+        const u = units.map(r => r.slice());
+        const t = terr.map(r => r.slice());
+        const c = u[fromX][fromY];
+        u[fromX][fromY] = null;
+        u[toX][toY] = c;
+        
+        if (c.type === 'SCOUT') {
+          for (let x = Math.max(0, toX - 1); x <= Math.min(SIZE - 1, toX + 1); x++) {
+            for (let y = Math.max(0, toY - 1); y <= Math.min(SIZE - 1, toY + 1); y++) {
+              t[x][y] = pl;
+            }
+          }
+          if (!isGodMode) {
+            setHist(h => [...h, `Скаут захватил территорию вокруг ${toX},${toY}`]);
+          }
+        } else {
+          t[toX][toY] = pl;
+          t[fromX][fromY] = pl;
+        }
+        
+        setUnits(u);
+        setTerr(t);
+        if (!isGodMode) {
+          setHist(h => [...h, `Mv@${toX},${toY}`]);
+        }
+        return true;
+      }
+
+      // Функция для выполнения атаки
+      function executeAttack(fromX, fromY, toX, toY) {
+        if (!units[fromX][fromY] || units[fromX][fromY].pl !== pl) return false;
+        if (!units[toX][toY] || units[toX][toY].pl === pl) return false;
+        
+        const u = units.map(r => r.slice());
+        const attacker = u[fromX][fromY];
+        const defender = u[toX][toY];
+        const dmg = Math.max(1, TYPES[attacker.type].dam - TYPES[defender.type].arm);
+        defender.hp -= dmg;
+        
+        let msg = `${attacker.type}->${defender.type}-${dmg}`;
+        if (defender.hp <= 0) {
+          u[toX][toY] = attacker;
+          u[fromX][fromY] = null;
+          const t2 = terr.map(r => r.slice());
+          t2[toX][toY] = pl;
+          setUnits(u);
+          setTerr(t2);
+          if (!isGodMode) {
+            setHist(h => [...h, msg + ',dead']);
+          }
+        } else {
+          u[toX][toY] = defender;
+          setUnits(u);
+          if (!isGodMode) {
+            setHist(h => [...h, msg + ` HP${defender.hp}`]);
+          }
+        }
+        return true;
+      }
+
+      // Сброс игры
+      function reset() {
+        setIsGodMode(false);
+        setIsAutoPlaying(false);
+        localStorage.removeItem('battleGameState');
+        window.location.reload();
+      }
+
+      // Конец хода
+      function end() {
+        setSel(null);
+        setMoves([]);
+        setAtt([]);
+        setTurn(t => t + 1);
+        setPl(p => p === 1 ? 2 : 1);
+      }
+
+      // Усовершенствованный режим Бога
+      function handleGodMode() {
+        if (!isGodMode) {
+          setIsGodMode(true);
+          
+          // Если в фазе расстановки и не все юниты размещены, автоматически размещаем их
+          if (phase === 'placement') {
+            autoPlaceInitialUnits();
+          } else if (phase === 'game') {
+            // Запускаем автоматическую игру
+            setTimeout(godModeAction, 300);
+          }
+        } else {
+          setIsGodMode(false);
+        }
+      }
+      
+      // Автоматическое размещение начальных юнитов
+      function autoPlaceInitialUnits() {
+        if (placed >= INIT * 2) return;
+        
+        // Определяем зону для текущего игрока
+        const zone = pl === 1 ? [0, 1, 2] : [SIZE - 3, SIZE - 2, SIZE - 1];
+        const initialPlacements = [];
+        
+        // Находим все возможные места для размещения
+        for (let i of zone) {
+          for (let j = 0; j < SIZE; j++) {
+            if (!units[i][j]) {
+              initialPlacements.push([i, j]);
+            }
+          }
+        }
+        
+        // Если есть места для размещения и нужно еще разместить юнитов
+        if (initialPlacements.length > 0 && placed < INIT * 2) {
+          // Предпочитаем центральные позиции
+          initialPlacements.sort(([i1, j1], [i2, j2]) => {
+            const center = SIZE / 2 - 0.5;
+            const dist1 = Math.abs(j1 - center);
+            const dist2 = Math.abs(j2 - center);
+            return dist1 - dist2;
+          });
+          
+          // Размещаем юнита
+          const [i, j] = initialPlacements[0];
+          setTimeout(() => {
+            handle(i, j);
+            
+            // Продолжаем размещение, если еще не все юниты размещены
+            if (placed + 1 < INIT * 2) {
+              setTimeout(autoPlaceInitialUnits, 100);
+            }
+          }, 100);
+        }
+      }
+      
+      // Основная функция действий в режиме Бога
+      function godModeAction() {
+        if (!isGodMode || win) return;
+        
+        if (phase === 'placement') {
+          autoPlaceInitialUnits();
+          return;
+        }
+        
+        if (phase === 'placing') {
+          // Автоматически размещаем купленного юнита
+          const availableSpots = [];
+          for (let i = 0; i < SIZE; i++) {
+            for (let j = 0; j < SIZE; j++) {
+              if (!units[i][j] && terr[i][j] === pl) {
+                // Оцениваем позицию - предпочитаем границы территории
+                let borderScore = 0;
+                for (const [nx, ny] of neigh(i, j)) {
+                  if (!terr[nx][ny] || terr[nx][ny] !== pl) {
+                    borderScore += 1;
+                  }
+                }
+                availableSpots.push([i, j, borderScore]);
+              }
+            }
+          }
+          
+          if (availableSpots.length > 0) {
+            availableSpots.sort((a, b) => b[2] - a[2]);
+            const [bestI, bestJ] = availableSpots[0];
+            setTimeout(() => {
+              handle(bestI, bestJ);
+            }, 100);
+          } else {
+            setTimeout(cancelPlacing, 100);
+          }
+          return;
+        }
+        
+        setTimeout(() => {
+          let actionPerformed = false;
+          
+          // Шаг 1: Собираем все доступные юниты текущего игрока
+          const playerUnits = [];
+          for (let i = 0; i < SIZE; i++) {
+            for (let j = 0; j < SIZE; j++) {
+              if (units[i][j] && units[i][j].pl === pl) {
+                playerUnits.push([i, j, units[i][j]]);
+              }
+            }
+          }
+          
+          // Перемешиваем юниты для случайного порядка действий
+          playerUnits.sort(() => Math.random() - 0.5);
+          
+          // Шаг 2: Пробуем действовать каждым юнитом
+          for (const [unitX, unitY, unit] of playerUnits) {
+            // Сначала проверяем возможность атаки
+            const attackOptions = [];
+            for (const [nx, ny] of neigh(unitX, unitY)) {
+              if (units[nx][ny] && units[nx][ny].pl !== pl) {
+                const damage = Math.max(1, TYPES[unit.type].dam - TYPES[units[nx][ny].type].arm);
+                const canKill = damage >= units[nx][ny].hp;
+                attackOptions.push({
+                  x: nx,
+                  y: ny,
+                  damage: damage,
+                  canKill: canKill,
+                  priority: canKill ? 2 : 1
+                });
+              }
+            }
+            
+            // Если есть возможность атаки - атакуем
+            if (attackOptions.length > 0) {
+              attackOptions.sort((a, b) => b.priority - a.priority || b.damage - a.damage);
+              const bestAttack = attackOptions[0];
+              if (executeAttack(unitX, unitY, bestAttack.x, bestAttack.y)) {
+                actionPerformed = true;
+                break;
+              }
+            }
+            
+            // Если не атаковали - пробуем двигаться
+            if (!actionPerformed) {
+              const moveOptions = [];
+              const moveRange = TYPES[unit.type].mv;
+              
+              // BFS для поиска возможных перемещений
+              const visited = Array(SIZE).fill().map(() => Array(SIZE).fill(false));
+              const queue = [[unitX, unitY, 0]];
+              visited[unitX][unitY] = true;
+              
+              while (queue.length > 0) {
+                const [x, y, dist] = queue.shift();
+                
+                if (dist > 0 && !units[x][y]) {
+                  let score = 0;
+                  
+                  // Значительно увеличиваем приоритет захвата новой территории
+                  if (terr[x][y] !== pl) {
+                    score += 20; // Увеличили с 10 до 20
+                  }
+                  
+                  // Штраф за движение по своей территории
+                  if (terr[x][y] === pl) {
+                    score -= 10; // Увеличили штраф с 5 до 10
+                  }
+                  
+                  // Бонус за движение к центру
+                  const centerDist = Math.abs(x - SIZE/2) + Math.abs(y - SIZE/2);
+                  score += (SIZE - centerDist);
+                  
+                  // Бонус за близость к вражеским юнитам
+                  for (const [nx, ny] of neigh(x, y)) {
+                    if (units[nx][ny] && units[nx][ny].pl !== pl) {
+                      score += 5;
+                    }
+                  }
+                  
+                  // Бонус за движение к незахваченной территории
+                  let expansionBonus = 0;
+                  for (const [nx, ny] of neigh(x, y)) {
+                    if (nx >= 0 && nx < SIZE && ny >= 0 && ny < SIZE) {
+                      if (!terr[nx][ny]) {
+                        expansionBonus += 3;
+                      }
+                    }
+                  }
+                  score += expansionBonus;
+                  
+                  moveOptions.push({
+                    x: x,
+                    y: y,
+                    dist: dist,
+                    score: score
+                  });
+                }
+                
+                if (dist < moveRange) {
+                  for (const [nx, ny] of neigh(x, y)) {
+                    if (!visited[nx][ny] && !units[nx][ny]) {
+                      visited[nx][ny] = true;
+                      queue.push([nx, ny, dist + 1]);
+                    }
+                  }
+                }
+              }
+              
+              // Если есть варианты движения
+              if (moveOptions.length > 0) {
+                moveOptions.sort((a, b) => b.score - a.score);
+                
+                // Предпочитаем ходы на новую территорию
+                const newTerritoryMoves = moveOptions.filter(opt => terr[opt.x][opt.y] !== pl);
+                
+                if (newTerritoryMoves.length > 0) {
+                  const bestMove = newTerritoryMoves[0];
+                  if (executeMove(unitX, unitY, bestMove.x, bestMove.y)) {
+                    actionPerformed = true;
+                    break;
+                  }
+                } else if (moveOptions.length > 0) {
+                  const bestMove = moveOptions[0];
+                  if (executeMove(unitX, unitY, bestMove.x, bestMove.y)) {
+                    actionPerformed = true;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+          
+          // Шаг 3: Если не сделали ход - пробуем купить юнита
+          if (!actionPerformed) {
+            const territoryCount = terr.flat().filter(t => t === pl).length;
+            const canPlace = terr.some((row, i) => row.some((t, j) => t === pl && !units[i][j]));
+            
+            if (canPlace) {
+              const availableTypes = Object.entries(TYPES)
+                .filter(([k, v]) => v.cost <= res && territoryCount >= v.unlock)
+                .sort((a, b) => {
+                  if (a[0] === 'SCOUT') return -1;
+                  if (b[0] === 'SCOUT') return 1;
+                  return b[1].cost - a[1].cost;
+                });
+              
+              if (availableTypes.length > 0) {
+                const [unitType] = availableTypes[0];
+                buy(unitType);
+                actionPerformed = true;
+              }
+            }
+          }
+          
+          // Если ничего не сделали - заканчиваем ход
+          if (!actionPerformed) {
+            setTimeout(end, 100);
+          } else {
+            setTimeout(godModeAction, 300);
+          }
+        }, 300);
+      }
+      
+      // Используем эффект для отслеживания изменений в состоянии игры для godMode
+      useEffect(() => {
+        if (isGodMode && !win && !menu) {
+          if (phase === 'placement') {
+            autoPlaceInitialUnits();
+          } else if (phase === 'game' && !sel && !isAutoPlaying) {
+            setTimeout(godModeAction, 300);
+          } else if (phase === 'placing') {
+            setTimeout(godModeAction, 300);
+          }
+        }
+      }, [isGodMode, phase, pl, turn]);
+
+      // Автоматически совершает один ход за игрока
+      function autoPlayOneTurn() {
+        if (phase !== 'game' || win || isAutoPlaying) return;
+        
+        setIsAutoPlaying(true);
+        
+        // Используем ту же логику, что и в godModeAction, но только для одного хода
+        setTimeout(() => {
+          let actionPerformed = false;
+          
+          // Находим все доступные юниты текущего игрока
+          const playerUnits = [];
+          for (let i = 0; i < SIZE; i++) {
+            for (let j = 0; j < SIZE; j++) {
+              if (units[i][j] && units[i][j].pl === pl) {
+                playerUnits.push([i, j, units[i][j]]);
+              }
+            }
+          }
+          
+          // 1. Пробуем атаковать
+          for (const [unitX, unitY, unit] of playerUnits) {
+            const attackOptions = [];
+            
+            for (const [nx, ny] of neigh(unitX, unitY)) {
+              if (units[nx][ny] && units[nx][ny].pl !== pl) {
+                const damage = Math.max(1, TYPES[unit.type].dam - TYPES[units[nx][ny].type].arm);
+                const canKill = damage >= units[nx][ny].hp;
+                
+                attackOptions.push({
+                  x: nx,
+                  y: ny,
+                  damage: damage,
+                  canKill: canKill,
+                  priority: canKill ? 2 : 1
+                });
+              }
+            }
+            
+            if (attackOptions.length > 0) {
+              attackOptions.sort((a, b) => b.priority - a.priority || b.damage - a.damage);
+              const bestAttack = attackOptions[0];
+              
+              if (executeAttack(unitX, unitY, bestAttack.x, bestAttack.y)) {
+                actionPerformed = true;
+                setTimeout(() => {
+                  setIsAutoPlaying(false);
+                  end();
+                }, 300);
+                return;
+              }
+            }
+          }
+          
+          // 2. Если не можем атаковать, пробуем двигаться
+          if (!actionPerformed) {
+            // Перемешиваем юниты для разнообразия
+            playerUnits.sort(() => Math.random() - 0.5);
+            
+            for (const [unitX, unitY, unit] of playerUnits) {
+              const moveOptions = [];
+              const moveRange = TYPES[unit.type].mv;
+              
+              // BFS для поиска возможных перемещений
+              const visited = Array(SIZE).fill().map(() => Array(SIZE).fill(false));
+              const queue = [[unitX, unitY, 0]];
+              visited[unitX][unitY] = true;
+              
+              while (queue.length > 0) {
+                const [x, y, dist] = queue.shift();
+                
+                if (dist > 0 && !units[x][y]) {
+                  let score = 0;
+                  
+                  // Приоритет незахваченным территориям
+                  if (terr[x][y] !== pl) {
+                    score += 10;
+                  } else {
+                    // Штраф за движение по своей территории
+                    score -= 5;
+                  }
+                  
+                  // Приоритет центру
+                  const centerDist = Math.abs(x - SIZE/2) + Math.abs(y - SIZE/2);
+                  score += (SIZE - centerDist) / 2;
+                  
+                  moveOptions.push({
+                    x: x,
+                    y: y,
+                    dist: dist,
+                    score: score
+                  });
+                }
+                
+                if (dist < moveRange) {
+                  for (const [nx, ny] of neigh(x, y)) {
+                    if (!visited[nx][ny] && !units[nx][ny]) {
+                      visited[nx][ny] = true;
+                      queue.push([nx, ny, dist + 1]);
+                    }
+                  }
+                }
+              }
+              
+              if (moveOptions.length > 0) {
+                moveOptions.sort((a, b) => b.score - a.score);
+                
+                // Приоритет не-своим территориям
+                const nonBacktrackOptions = moveOptions.filter(opt => terr[opt.x][opt.y] !== pl);
+                
+                const bestMove = nonBacktrackOptions.length > 0 ? nonBacktrackOptions[0] : moveOptions[0];
+                
+                if (executeMove(unitX, unitY, bestMove.x, bestMove.y)) {
+                  actionPerformed = true;
+                  setTimeout(() => {
+                    setIsAutoPlaying(false);
+                    end();
+                  }, 300);
+                  return;
+                }
+              }
+            }
+          }
+          
+          // 3. Если не можем ходить или атаковать, пробуем купить юнита
+          if (!actionPerformed) {
+            const territoryCount = terr.flat().filter(t => t === pl).length;
+            const canPlace = terr.some((row, i) => row.some((t, j) => t === pl && !units[i][j]));
+            
+            if (canPlace) {
+              const availableTypes = Object.entries(TYPES)
+                .filter(([k, v]) => v.cost <= res && territoryCount >= v.unlock)
+                .sort((a, b) => {
+                  if (a[0] === 'SCOUT') return -1;
+                  if (b[0] === 'SCOUT') return 1;
+                  return b[1].cost - a[1].cost;
+                });
+              
+              if (availableTypes.length > 0) {
+                const [unitType, unitData] = availableTypes[0];
+                buy(unitType);
+                actionPerformed = true;
+                setTimeout(() => {
+                  setIsAutoPlaying(false);
+                }, 300);
+                return;
+              }
+            }
+          }
+          
+          // Если ничего не сделали, заканчиваем ход
+          if (!actionPerformed) {
+            setTimeout(() => {
+              setIsAutoPlaying(false);
+              end();
+            }, 100);
+          }
+        }, 300);
+      }
+
+      // Покупка юнита
+      function buy(type) {
+        // Особая обработка для Скаута - всегда доступен
+        if (type === 'SCOUT') {
+          const canPlace = terr.some((row, i) => row.some((t, j) => t === pl && !units[i][j]));
+          if (!canPlace) {
+            setError('Нет свободных клеток для размещения!');
+            return;
+          }
+          setMenu(false); setPhase('placing'); setPlace(type); 
+          // Показываем подсказку только если не в god mode
+          if (!isGodMode) {
+            setHint(true);
+          }
+          // Фиксированная стоимость для Скаута - 1 ресурс, даже если у игрока меньше
+          setRes(r => Math.max(0, r - 1));
+          return;
+        }
+        
+        // Стандартная обработка для других юнитов
+        const unlocked = terr.flat().filter(t => t === pl).length >= TYPES[type].unlock;
+        if (res < TYPES[type].cost || !unlocked) return;
+        const canPlace = terr.some((row, i) => row.some((t, j) => t === pl && !units[i][j]));
+        if (!canPlace) {
+          setError('Нет свободных клеток для размещения!');
+          return;
+        }
+        setMenu(false); setPhase('placing'); setPlace(type); 
+        // Показываем подсказку только если не в god mode
+        if (!isGodMode) {
+          setHint(true);
+        }
+        setRes(r => r - TYPES[type].cost);
+      }
+      
+      // Отмена размещения
+      function cancelPlacing() {
+        setPhase('game'); setPlace(null); setHint(false);
+      }
+      
+      // Обработка клика по клетке
+      function handle(i, j) {
+        if (win) return;
+        setError(null);
+        // Расстановка
+        if (phase === 'placement') {
+          const zone = pl === 1 ? i < INIT : i >= SIZE - INIT;
+          if (!units[i][j] && zone) {
+            const u = units.map(r => r.slice());
+            const t = terr.map(r => r.slice());
+            u[i][j] = { type: 'KNIGHT', pl, hp: TYPES.KNIGHT.hp };
+            t[i][j] = pl;
+            setUnits(u); setTerr(t); setPlaced(p => p + 1); 
+            if (!isGodMode) {
+              setHist(h => [...h, `K@${i},${j}`]);
+            }
+            setPl(3 - pl);
+          }
+          return;
+        }
+        // Размещение купленного юнита
+        if (phase === 'placing') {
+          if (!units[i][j] && terr[i][j] === pl) {
+            const u = units.map(r => r.slice());
+            u[i][j] = { type: place, pl, hp: TYPES[place].hp };
+            setUnits(u);
+            if (!isGodMode) {
+              setHist(h => [...h, `${place}@${i},${j}`]);
+            }
+            setPhase('game'); setHint(false); setPlace(null);
+            end();
+          }
+          return;
+        }
+        // Основная игра
+        if (phase === 'game') {
+          if (sel) {
+            if (moves.some(m => m[0] === i && m[1] === j)) {
+              // Ход
+              executeMove(sel.x, sel.y, i, j);
+              setSel(null); setMoves([]); setAtt([]);
+              end();
+              return;
+            }
+            if (att.some(a => a[0] === i && a[1] === j)) {
+              // Атака
+              executeAttack(sel.x, sel.y, i, j);
+              setSel(null); setMoves([]); setAtt([]);
+              end();
+              return;
+            }
+            setSel(null); setMoves([]); setAtt([]);
+            return;
+          }
+          // Выбор своего юнита
+          const cell = units[i][j];
+          if (cell && cell.pl === pl) {
+            // BFS для расчёта ходов
+            const vis = Array(SIZE).fill().map(() => Array(SIZE).fill(false));
+            const q = [[i, j, 0]];
+            vis[i][j] = true;
+            const mv = [], at = [];
+            while (q.length) {
+              const [x, y, d] = q.shift();
+              if (d > 0 && !units[x][y]) mv.push([x, y]);
+              if (d === TYPES[cell.type].mv) continue;
+              neigh(x, y).forEach(([nx, ny]) => {
+                if (vis[nx][ny]) return;
+                vis[nx][ny] = true;
+                if (units[nx][ny] && units[nx][ny].pl !== pl) at.push([nx, ny]);
+                else q.push([nx, ny, d + 1]);
+              });
+            }
+            setSel({ x: i, y: j }); setMoves(mv); setAtt(at);
+          }
+        }
+      }
+
+      // Доступность: Escape для отмены размещения
+      useEffect(() => {
+        function esc(e) {
+          if (e.key === 'Escape' && hint) cancelPlacing();
+        }
+        window.addEventListener('keydown', esc);
+        return () => window.removeEventListener('keydown', esc);
+      }, [hint]);
+
+      // Рендер
+      return e('div', null,
+        e(HUD, { pl, res, phase, turn }),
+        e(Grid, { units, terr, sel, moves, att, onCellClick: handle }),
+        e('div', { className: 'controls' },
+          phase === 'game' && e('button', { onClick: () => setMenu(true) }, 'Buy'),
+          phase === 'game' && e('button', { onClick: end }, 'End'),
+          phase === 'game' && e('button', { 
+            className: 'auto-play-button',
+            disabled: isAutoPlaying || isGodMode,
+            onClick: autoPlayOneTurn 
+          }, 'Auto Play'),
+          e('button', {
+            className: isGodMode ? 'god-mode-active' : '',
+            onClick: handleGodMode
+          }, isGodMode ? 'GOD MODE: ON' : 'GOD MODE: OFF'),
+          e('button', { onClick: reset }, 'Reset'),
+          e('button', { onClick: () => { localStorage.removeItem('battleGameState'); window.location.reload(); } }, 'Clear Save')
+        ),
+        menu && e(BuyMenu, { terr, pl, res, onBuy: buy, onClose: () => setMenu(false) }),
+        hint && e('div', { className: 'hint', role: 'alertdialog' },
+          e('p', null, place === 'SCOUT' 
+            ? 'Щёлкните по своей территории, чтобы разместить Скаута. Этот юнит захватывает большие территории!' 
+            : 'Щёлкните по своей территории, чтобы разместить юнита, или отмените.'),
+          e('button', { onClick: cancelPlacing }, 'Отмена')
+        ),
+        error && e('div', { className: 'error-message' }, error),
+        !isGodMode && e(History, { hist }),
+        win && e('div', { className: 'winner', role: 'alertdialog' },
+          e('h2', null, typeof win === 'number' ? `Player ${win} wins` : 'Draw'),
+          e('button', { onClick: reset }, 'Replay')
+        )
+      );
+    }
+
+    // Рендерим приложение
+    ReactDOM.render(e(App), document.getElementById('root'));
+
+    // Переключение правил
+    document.getElementById('toggleRules').onclick = () =>
+      document.getElementById('rules').classList.toggle('hidden');
+  })();
+  </script>
+</body>
+</html>
+

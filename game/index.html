@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Битва за территории — стратегическая игра на поле 10×10 с разными типами юнитов и тактическими возможностями." />
+  <meta name="keywords" content="стратегия, игра, битва, территории, тактика" />
+  <meta name="author" content="Alex" />
+  <meta property="og:title" content="Битва за территории v9 (10×10)" />
+  <meta property="og:description" content="Стратегическая игра: захвати больше территорий, победи соперника!" />
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="ru_RU" />
+  <title>Битва за территории v9 (10×10)</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏇</text></svg>" />
+  <!-- Preload React libraries for better performance -->
+  <link rel="preload" href="https://unpkg.com/react@17/umd/react.development.js" as="script" />
+  <link rel="preload" href="https://unpkg.com/react-dom@17/umd/react-dom.development.js" as="script" />
+</head>
+<body>
+  <header>
+    <h1>Битва за территории v9</h1>
+    <button id="toggleRules" aria-expanded="false" aria-controls="rules">Правила</button>
+  </header>
+  
+  <main id="root" aria-live="polite"></main>
+  
+  <aside id="rules" class="rules" aria-live="polite" tabindex="-1" hidden>
+    <h3>Правила</h3>
+    <ul>
+      <li>Поле: 10×10.</li>
+      <li>Фаза расстановки: каждый размещает 3 рыцаря на своих флангах.</li>
+      <li>Фаза игры: выбрать юнита, переместить или атаковать.</li>
+      <li>Ресурсы: каждую фазу вы получаете +1 за каждую вашу территорию.</li>
+      <li>Покупка: юниты доступны при достаточных ресурсах и разблокированы по количеству территорий.</li>
+      <li>Победа: у противника нет юнитов или заполнено всё поле (сравниваются территории).</li>
+    </ul>
+  </aside>
+  
+  <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+  <script src="phrases.js"></script>
+  <script src="app.js"></script>
+  <script>
+    const btn = document.getElementById('toggleRules');
+    const rules = document.getElementById('rules');
+    btn.onclick = () => {
+      const isHidden = rules.hasAttribute('hidden');
+      if (isHidden) {
+        rules.removeAttribute('hidden');
+        btn.setAttribute('aria-expanded', 'true');
+        rules.focus();
+      } else {
+        rules.setAttribute('hidden', '');
+        btn.setAttribute('aria-expanded', 'false');
+      }
+    };
+  </script>
+</body>
+</html>
